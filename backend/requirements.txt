@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pymongo
+librosa
+torch
+transformers
+scipy
+jiwer
+soundfile
+firebase-admin
+agno
+groq
+kokoro
+python-dotenv
