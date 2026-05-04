@@ -1,4 +1,4 @@
-# 🎙️ AI Voice Assessment System
+# 🎙️ Automatic Pronunciation Assessment with Child Speaker Verification (EXTENDED WITH GAMIFIED LEARNING)
 
 An AI-powered pronunciation assessment and speaker verification platform for school-aged children. Students read AI-generated sentences aloud, hear correct pronunciation via TTS, and receive instant accuracy feedback. Their vocal identity is verified biometrically every session.
 
