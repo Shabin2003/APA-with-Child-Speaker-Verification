@@ -21,28 +21,28 @@ An AI-powered pronunciation assessment and speaker verification platform for sch
 ## 📸 Screenshots
 
 ### 🎤 Student Speaker Enrollment
-![Speaker Enrollment](./assets/speaker-enrollment.png)
+![Speaker Enrollment](./assets/speaker-enrollment.jpeg)
 
 ### ✅ Student Speaker Verification
-![Speaker Verification](./assets/speaker-verification.png)
+![Speaker Verification](./assets/speaker-verification.jpeg)
 
 ### 👨‍🏫 Teacher Dashboard
-![Teacher Dashboard](./assets/teacher-dashboard.png)
+![Teacher Dashboard](./assets/teacher-dashboard.jpeg)
 
 ### 🧑‍🎓 Teacher Interface with Admin dashboard on top right
-![Teacher Interface](./assets/teacher-interface.png)
+![Teacher Interface](./assets/teacher-interface.jpeg)
 
 ---
 ## 🎮 Interactive Learning Modules
 
 ### 🍎 Fruit Naming (Speech Recognition)
-![Fruit Naming](./assets/fruit-naming.png)
+![Fruit Naming](./assets/fruit-naming.jpeg)
 
 ### 🎨 Colours Matching
-![Colours Matching](./assets/color-matching.png)
+![Colours Matching](./assets/color-matching.jpeg)
 
 ### 🧮 BODMAS Game (Voice + Input)
-![BODMAS](./assets/bodmas.png)
+![BODMAS](./assets/bodmas.jpeg)
 ![BODMAS Gameplay](./assets/bodmas1.jpeg)
 
 ---
