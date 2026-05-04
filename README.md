@@ -23,38 +23,41 @@ An AI-powered pronunciation assessment and speaker verification platform for sch
 ```mermaid
 graph TB
     subgraph Client["Browser (React + TypeScript)"]
-        UI[Student / Teacher UI]
-        MR[MediaRecorder API]
+        UI["Student / Teacher UI"]
+        MR["MediaRecorder API"]
     end
 
     subgraph Backend["FastAPI Backend (Python + CUDA)"]
-        AUTH[Firebase JWT Middleware]
-        PRON[/pronunciation/analyze-and-verify]
-        ENROLL[/speaker/enroll]
-        GEN[/generate-text]
+        AUTH["Firebase JWT Middleware"]
+        PRON["Pronunciation API"]
+        ENROLL["Speaker Enroll API"]
+        GEN["Text Generation API"]
     end
 
     subgraph ML["ML Models"]
-        WHISPER[OpenAI Whisper Medium\nASR]
-        ECAPA[ECAPA-TDNN\nSpeaker Verification]
-        KOKORO[Kokoro 82M\nTTS]
-        GROQ[Groq Llama 3.1\nSentence Generator]
+        WHISPER["Whisper ASR"]
+        ECAPA["ECAPA-TDNN Speaker Verification"]
+        KOKORO["Kokoro TTS"]
+        GROQ["Llama 3.1 Generator"]
     end
 
     subgraph Data["Persistence"]
-        MONGO[(MongoDB Atlas)]
-        FB[Firebase Auth]
+        MONGO[("MongoDB Atlas")]
+        FB["Firebase Auth"]
     end
 
     UI --> MR --> PRON
     UI --> ENROLL
     UI --> GEN
+
     AUTH --> FB
+
     PRON --> WHISPER
     PRON --> ECAPA
     ENROLL --> ECAPA
     GEN --> GROQ
     GEN --> KOKORO
+
     Backend --> MONGO
 ```
 
