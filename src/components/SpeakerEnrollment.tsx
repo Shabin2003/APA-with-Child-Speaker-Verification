@@ -49,6 +49,21 @@ export const SpeakerEnrollment = () => {
     }
   }, [user?.id]);
 
+  // Listen for camera/mic permission dismissal fired by the recorder hooks
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const reason = (e as CustomEvent).detail?.reason ?? 'unknown';
+      const msg = reason === 'dismissed'
+        ? 'Camera/microphone permission was dismissed. Click Allow when the browser asks for permission.'
+        : reason === 'no-device'
+        ? 'No camera or microphone found. Switch to Audio Only mode or connect a device.'
+        : `Could not access media device: ${reason}`;
+      setError(msg);
+    };
+    window.addEventListener('recording-permission-denied', handler);
+    return () => window.removeEventListener('recording-permission-denied', handler);
+  }, []);
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -167,7 +182,7 @@ export const SpeakerEnrollment = () => {
             </div>
             <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-lg p-6">
               <p className="text-2xl text-center font-medium text-gray-800 leading-relaxed">
-                "{ENROLLMENT_PROMPTS[currentPrompt]}"
+                "{ENROLLMENT_PROMPTS[Math.min(currentPrompt, ENROLLMENT_PROMPTS.length - 1)]}"
               </p>
             </div>
           </div>

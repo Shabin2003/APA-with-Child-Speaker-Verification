@@ -39,6 +39,21 @@ export const SpeakerVerification = () => {
       .catch(() => setIsEnrolled(false));
   }, [user?.id]);
 
+  // Listen for camera/mic permission dismissal fired by the recorder hooks
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const reason = (e as CustomEvent).detail?.reason ?? 'unknown';
+      const msg = reason === 'dismissed'
+        ? 'Camera/microphone permission was dismissed. Click Allow when the browser asks for permission.'
+        : reason === 'no-device'
+        ? 'No camera or microphone found. Switch to Audio Only mode or connect a device.'
+        : `Could not access media device: ${reason}`;
+      setError(msg);
+    };
+    window.addEventListener('recording-permission-denied', handler);
+    return () => window.removeEventListener('recording-permission-denied', handler);
+  }, []);
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -67,7 +82,15 @@ export const SpeakerVerification = () => {
       setVerificationStatus(res.decision === 'ACCEPT' ? 'success' : 'failed');
       setStep('result');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed — is the backend running?');
+      const msg = err instanceof Error ? err.message : 'Verification failed — is the backend running?';
+      // 409 means the backend detected stale embeddings from a previous model
+      // and has already wiped them. Direct the user straight to re-enrollment.
+      if (msg.toLowerCase().includes('older model') || msg.toLowerCase().includes('reset')) {
+        setIsEnrolled(false);
+        setError('Your voice profile was built with an older model and has been reset. Please go to the Enrollment tab and record your samples again.');
+      } else {
+        setError(msg);
+      }
       setVerificationStatus('failed');
       setStep('result');
     } finally {
@@ -308,7 +331,7 @@ export const SpeakerVerification = () => {
             <input type="number" value={age} onChange={e => setAge(e.target.value)}
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none transition-colors"
               placeholder="Enter your age" min="1" max="120" required />
-            <p className="text-xs text-gray-400 mt-1">Under 12: threshold 0.65 · 12 and above: threshold 0.75</p>
+            <p className="text-xs text-gray-400 mt-1">Under 12: threshold 0.55 · 12–17: threshold 0.62 · 18+: threshold 0.68</p>
           </div>
 
           {error && (

@@ -20,7 +20,7 @@ export const useAudioRecorder = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
@@ -38,7 +38,21 @@ export const useAudioRecorder = () => {
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
 
-      const mediaRecorder = new MediaRecorder(stream);
+      // Pick the best supported audio MIME type.
+      // Preference order: wav (best for ASR), then ogg/opus, then webm/opus,
+      // then plain webm.  Safari supports audio/mp4 but not webm.
+      const PREFERRED_TYPES = [
+        'audio/wav',
+        'audio/ogg;codecs=opus',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+      ];
+      const mimeType = PREFERRED_TYPES.find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -49,7 +63,8 @@ export const useAudioRecorder = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const actualMime = mediaRecorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
         const audioUrl = URL.createObjectURL(audioBlob);
         setState((prev) => ({
           ...prev,
@@ -74,9 +89,23 @@ export const useAudioRecorder = () => {
           recordingTime: prev.recordingTime + 1,
         }));
       }, 1000);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error starting recording:', error);
-      alert('Could not access microphone. Please ensure microphone permissions are granted.');
+      const name = error instanceof Error ? error.name : '';
+      const msg  = error instanceof Error ? error.message : String(error);
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        window.dispatchEvent(new CustomEvent('recording-permission-denied', {
+          detail: { reason: 'dismissed' },
+        }));
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        window.dispatchEvent(new CustomEvent('recording-permission-denied', {
+          detail: { reason: 'no-device' },
+        }));
+      } else {
+        window.dispatchEvent(new CustomEvent('recording-permission-denied', {
+          detail: { reason: msg },
+        }));
+      }
     }
   }, []);
 

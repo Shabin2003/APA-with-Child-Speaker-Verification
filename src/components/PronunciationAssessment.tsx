@@ -1,88 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { BookOpen, TrendingUp, AlertCircle, Volume2, Video, RefreshCw, Sparkles, Info, Lightbulb } from 'lucide-react';
+import { playForAccuracy } from '../lib/sounds';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useVideoRecorder } from '../hooks/useVideoRecorder';
-import { analyzePronunciation, generateText, getSentencePool } from '../lib/api';
-import type { GenerateTextResponse } from '../lib/api';
+import { analyzePronunciation, analyzePronunciationAndVerify, generateText, getSentencePool } from '../lib/api';
+import type { GenerateTextResponse, PronunciationAndVerifyResponse } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { AudioVisualizer } from './AudioVisualizer';
 import { RecordingControls } from './RecordingControls';
 import { VideoPreview } from './VideoPreview';
 import { Tooltip } from './Tooltip';
 import { GuideBox } from './GuideBox';
-
-// ── Sound effects using Web Audio API (no external files needed) ────────────
-
-function useSoundEffects() {
-  const playSound = (type: 'excellent' | 'good' | 'poor' | 'try_again') => {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-
-      const play = (
-        freq: number, startTime: number, duration: number,
-        gainVal: number, type: OscillatorType = 'sine', endFreq?: number
-      ) => {
-        const osc  = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + startTime);
-        if (endFreq !== undefined) {
-          osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + startTime + duration);
-        }
-        gain.gain.setValueAtTime(gainVal, ctx.currentTime + startTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startTime + duration);
-        osc.start(ctx.currentTime + startTime);
-        osc.stop(ctx.currentTime + startTime + duration);
-      };
-
-      if (type === 'excellent') {
-        // 🎉 Fanfare — ascending triumphant notes + sparkle
-        play(523, 0.0, 0.15, 0.4, 'triangle');          // C5
-        play(659, 0.15, 0.15, 0.4, 'triangle');         // E5
-        play(784, 0.30, 0.15, 0.4, 'triangle');         // G5
-        play(1047, 0.45, 0.35, 0.5, 'triangle');        // C6 — held
-        play(1319, 0.50, 0.30, 0.25, 'sine');           // E6 harmony
-        // sparkle shimmer
-        play(2093, 0.55, 0.08, 0.15, 'sine');
-        play(2637, 0.63, 0.08, 0.12, 'sine');
-        play(2093, 0.71, 0.08, 0.10, 'sine');
-
-      } else if (type === 'good') {
-        // 👍 Two cheerful upward tones
-        play(523, 0.0, 0.18, 0.35, 'triangle');         // C5
-        play(784, 0.20, 0.25, 0.40, 'triangle');        // G5
-        play(1047, 0.20, 0.25, 0.20, 'sine');           // C6 harmony
-
-      } else if (type === 'poor') {
-        // 😊 Gentle encouraging wobble — not discouraging, just motivating
-        play(440, 0.0, 0.20, 0.25, 'sine');             // A4
-        play(392, 0.22, 0.20, 0.20, 'sine');            // G4
-        play(440, 0.44, 0.25, 0.20, 'sine');            // A4 — ends on same note (hopeful)
-
-      } else if (type === 'try_again') {
-        // 🔁 Soft two-tone nudge
-        play(350, 0.0, 0.15, 0.20, 'sine');
-        play(300, 0.18, 0.20, 0.15, 'sine');
-      }
-
-      // Close context after all sounds finish
-      setTimeout(() => ctx.close(), 2000);
-    } catch {
-      // AudioContext blocked (e.g. no user interaction) — silently skip
-    }
-  };
-
-  const playForScore = (accuracy: number) => {
-    if (accuracy >= 90)      playSound('excellent');
-    else if (accuracy >= 75) playSound('good');
-    else if (accuracy >= 50) playSound('poor');
-    else                     playSound('try_again');
-  };
-
-  return { playSound, playForScore };
-}
 
 // ── Static fallback pool — grows at runtime from MongoDB ─────────────────────
 // These are used when the FastAPI server is down.
@@ -130,14 +58,26 @@ export const PronunciationAssessment = () => {
   const [isGenerating, setIsGenerating]           = useState(false);
   const [assessmentResult, setAssessmentResult]   = useState<AssessmentResult | null>(null);
   const [isAssessing, setIsAssessing]             = useState(false);
+  const [verifyResult, setVerifyResult]           = useState<PronunciationAndVerifyResponse | null>(null);
   const [error, setError]                         = useState<string | null>(null);
   const [step, setStep]                           = useState<'select' | 'recording' | 'result'>('select');
   const [useVideo, setUseVideo]                   = useState(true);
   const ttsRef = useRef<HTMLAudioElement | null>(null);
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+
+  // Clear cached Audio element whenever the sentence changes
+  useEffect(() => {
+    if (ttsRef.current) {
+      ttsRef.current.pause();
+      ttsRef.current = null;
+    }
+    window.speechSynthesis?.cancel();
+    setTtsPlaying(false);
+  }, [currentSentenceData?.audio_url]);
 
   const audioRecorder = useAudioRecorder();
   const videoRecorder = useVideoRecorder();
-  const { playForScore } = useSoundEffects();
+  const playForScore = playForAccuracy;
 
   // On mount — load MongoDB sentence pool to grow the fallback list
   useEffect(() => {
@@ -193,16 +133,44 @@ export const PronunciationAssessment = () => {
   };
 
   const playTTS = () => {
-    if (!currentSentenceData?.audio_url) return;
-    const url = `${import.meta.env.VITE_API_URL}${currentSentenceData.audio_url}`;
-    if (ttsRef.current) {
-      ttsRef.current.pause();
-      ttsRef.current.src = url;
-      ttsRef.current.play();
+    const sentence = currentSentenceData?.sentence ?? '';
+    if (!sentence) return;
+
+    if (currentSentenceData?.audio_url) {
+      // Kokoro TTS — strip trailing slash to avoid double-slash in URL
+      const base = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
+      const url  = `${base}${currentSentenceData.audio_url}`;
+
+      if (ttsRef.current) {
+        ttsRef.current.pause();
+        ttsRef.current.src = url;
+      } else {
+        ttsRef.current = new Audio(url);
+        ttsRef.current.onended = () => setTtsPlaying(false);
+        ttsRef.current.onerror = () => {
+          // Kokoro file missing/broken — fall back to browser TTS
+          setTtsPlaying(false);
+          speakWithBrowser(sentence);
+        };
+      }
+      setTtsPlaying(true);
+      ttsRef.current.play().catch(() => speakWithBrowser(sentence));
     } else {
-      ttsRef.current = new Audio(url);
-      ttsRef.current.play();
+      // No Kokoro audio — use browser Web Speech API
+      speakWithBrowser(sentence);
     }
+  };
+
+  const speakWithBrowser = (text: string) => {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utt  = new SpeechSynthesisUtterance(text);
+    utt.lang   = 'en-US';
+    utt.rate   = 0.9;
+    utt.onend  = () => setTtsPlaying(false);
+    utt.onerror = () => setTtsPlaying(false);
+    setTtsPlaying(true);
+    window.speechSynthesis.speak(utt);
   };
 
   const handleStopRecording = () => {
@@ -215,11 +183,16 @@ export const PronunciationAssessment = () => {
 
     setIsAssessing(true);
     setError(null);
+    setVerifyResult(null);
 
     try {
-      const result = await analyzePronunciation(currentSentenceData?.sentence ?? '', blob);
+      const age = (user as any)?.age ?? 12;
 
-      // Sanitize all numeric fields — API may return null/NaN on short/silent audio
+      // Single request — runs ASR + speaker verification in parallel on the backend
+      const result = await analyzePronunciationAndVerify(
+        currentSentenceData?.sentence ?? '', age, blob
+      );
+
       const safeNum = (v: unknown, fallback = 0) => {
         const n = Number(v);
         return isFinite(n) ? n : fallback;
@@ -232,8 +205,10 @@ export const PronunciationAssessment = () => {
         wer:        safeNum(result.wer,      1),
         cer:        safeNum(result.cer,      1),
       };
+
+      setVerifyResult(result);
       setAssessmentResult(finalResult);
-      playForScore(finalResult.accuracy);   // 🔊 play sound based on score
+      playForScore(finalResult.accuracy);
       setStep('result');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Assessment failed — is the backend running?');
@@ -253,6 +228,7 @@ export const PronunciationAssessment = () => {
     setStep('select');
     setAssessmentResult(null);
     setCurrentSentenceData(null);
+    setVerifyResult(null);
     setError(null);
     audioRecorder.resetRecording();
     videoRecorder.resetRecording();
@@ -298,11 +274,54 @@ export const PronunciationAssessment = () => {
             @keyframes spin { from { transform: rotate(-20deg) scale(0.5); } to { transform: rotate(0deg) scale(1); } }
           `}</style>
 
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-3 gap-4 mb-4">
             <ScoreCard label="Accuracy" value={`${assessmentResult.accuracy.toFixed(1)}%`} color="blue" />
             <ScoreCard label="Word Error" value={`${(assessmentResult.wer * 100).toFixed(1)}%`} color="purple" />
             <ScoreCard label="Char Error" value={`${(assessmentResult.cer * 100).toFixed(1)}%`} color="pink" />
           </div>
+
+          {/* ── Identity verification badge ─────────────────────────────────── */}
+          {verifyResult && (
+            <div className={`mb-5 p-4 rounded-xl border-2 flex items-center gap-3 ${
+              verifyResult.verification_status === 'not_enrolled'
+                ? 'bg-gray-50 border-gray-200'
+                : verifyResult.verified
+                  ? 'bg-green-50 border-green-300'
+                  : 'bg-red-50 border-red-300'
+            }`}>
+              <span className="text-2xl">
+                {verifyResult.verification_status === 'not_enrolled' ? '⚠️'
+                  : verifyResult.verified ? '🔒' : '🚨'}
+              </span>
+              <div className="flex-1">
+                <p className={`font-bold text-sm ${
+                  verifyResult.verification_status === 'not_enrolled'
+                    ? 'text-gray-600'
+                    : verifyResult.verified ? 'text-green-800' : 'text-red-800'
+                }`}>
+                  {verifyResult.verification_status === 'not_enrolled'
+                    ? 'Identity: Not enrolled — complete enrollment first'
+                    : verifyResult.verified
+                      ? `✅ Identity Verified — voice matched (${(verifyResult.similarity * 100).toFixed(1)}% confidence)`
+                      : `❌ Voice Mismatch — does not match enrolled profile (${(verifyResult.similarity * 100).toFixed(1)}% similarity)`}
+                </p>
+                {verifyResult.verification_status !== 'not_enrolled' && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Threshold: {(user as any)?.age < 12 ? '65%' : '75%'} · EER: {(verifyResult.eer * 100).toFixed(1)}%
+                  </p>
+                )}
+              </div>
+              {verifyResult.verification_status !== 'not_enrolled' && (
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                  verifyResult.verified
+                    ? 'bg-green-200 text-green-800'
+                    : 'bg-red-200 text-red-800'
+                }`}>
+                  {verifyResult.verification_status}
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="space-y-3 mb-6">
             <div className="p-4 bg-gray-50 rounded-lg border-2 border-gray-200">
@@ -352,12 +371,12 @@ export const PronunciationAssessment = () => {
             )}
             <div className="flex items-start justify-between gap-3 mb-3">
               <p className="text-xl font-medium text-gray-800 leading-relaxed flex-1">"{sentence}"</p>
-              {currentSentenceData?.audio_url && (
-                <button onClick={playTTS} title="Listen to pronunciation"
-                  className="shrink-0 w-10 h-10 flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white rounded-full transition shadow-md">
-                  <Volume2 className="w-4 h-4" />
-                </button>
-              )}
+              <button onClick={playTTS} title="Listen to pronunciation"
+                className={`shrink-0 w-10 h-10 flex items-center justify-center text-white rounded-full transition shadow-md ${
+                  ttsPlaying ? 'bg-blue-400 animate-pulse' : 'bg-blue-500 hover:bg-blue-600'
+                }`}>
+                <Volume2 className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Fact */}

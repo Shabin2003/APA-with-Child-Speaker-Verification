@@ -10,6 +10,7 @@ export const ADMIN_EMAIL_LIST: string[] = [
   'priya.sharma@school.edu',
   'rahul.verma@school.edu',
   'sunita.gupta@school.edu',
+  '22csaiml046@jssaten.ac.in',
 ];
 
 export const isAdminEmail = (email: string): boolean =>

@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 
 export const useVideoRecorder = () => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
@@ -11,7 +11,7 @@ export const useVideoRecorder = () => {
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const setVideoRef = useCallback((ref: HTMLVideoElement | null) => {
     videoRef.current = ref;
@@ -29,9 +29,20 @@ export const useVideoRecorder = () => {
       }
 
       chunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp8,opus',
-      });
+
+      // Pick the best supported video MIME type.
+      // Safari/iOS does not support video/webm — fall back to video/mp4.
+      const PREFERRED_VIDEO_TYPES = [
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm',
+        'video/mp4',
+      ];
+      const mimeType = PREFERRED_VIDEO_TYPES.find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -40,7 +51,8 @@ export const useVideoRecorder = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const actualMime = mediaRecorder.mimeType || 'video/webm';
+        const blob = new Blob(chunksRef.current, { type: actualMime });
         setVideoBlob(blob);
         setVideoUrl(URL.createObjectURL(blob));
 
@@ -56,8 +68,27 @@ export const useVideoRecorder = () => {
       timerRef.current = setInterval(() => {
         setRecordingTime((t) => t + 1);
       }, 1000);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to start recording:', err);
+      const name = err instanceof Error ? err.name : '';
+      const msg  = err instanceof Error ? err.message : String(err);
+
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        // User dismissed or denied the browser permission popup.
+        // Fire a custom event so the component can show an inline error
+        // instead of leaving the UI silently frozen.
+        window.dispatchEvent(new CustomEvent('recording-permission-denied', {
+          detail: { reason: 'dismissed' },
+        }));
+      } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+        window.dispatchEvent(new CustomEvent('recording-permission-denied', {
+          detail: { reason: 'no-device' },
+        }));
+      } else {
+        window.dispatchEvent(new CustomEvent('recording-permission-denied', {
+          detail: { reason: msg },
+        }));
+      }
     }
   }, []);
 

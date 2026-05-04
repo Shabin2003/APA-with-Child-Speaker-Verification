@@ -26,6 +26,13 @@ export interface PronunciationAnalysisResponse {
   accuracy: number;
 }
 
+export interface PronunciationAndVerifyResponse extends PronunciationAnalysisResponse {
+  verified: boolean;
+  similarity: number;
+  eer: number;
+  verification_status: 'ACCEPT' | 'REJECT' | 'not_enrolled' | 'audio_too_short' | 'timeout' | 'error';
+}
+
 export interface GenerateTextResponse {
   sentence: string;
   fact?: string;
@@ -162,6 +169,41 @@ export const verifySpeaker = async (
     body: formData,
   });
   return handleResponse<SpeakerVerificationResponse>(res);
+};
+
+/** POST /pronunciation/analyze-and-verify
+ *  Runs ASR scoring + speaker verification in parallel on the same audio.
+ *  Age is needed to set the verification threshold (< 12 → 0.65, else 0.75).
+ */
+export const analyzePronunciationAndVerify = async (
+  text: string,
+  age: number,
+  audioBlob: Blob
+): Promise<PronunciationAndVerifyResponse> => {
+  const formData = new FormData();
+  formData.append('text', text);
+  formData.append('age', age.toString());
+  formData.append('file', audioBlob, 'audio.wav');
+  const res = await fetch(`${API_BASE_URL}/pronunciation/analyze-and-verify`, {
+    method: 'POST',
+    headers: await authHeader(),
+    body: formData,
+  });
+  return handleResponse<PronunciationAndVerifyResponse>(res);
+};
+
+/** POST /asr/transcribe — quick transcription for games (fruits, colours, BODMAS) */
+export const transcribeAudio = async (
+  audioBlob: Blob
+): Promise<{ transcript: string }> => {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'audio.wav');
+  const res = await fetch(`${API_BASE_URL}/asr/transcribe`, {
+    method: 'POST',
+    headers: await authHeader(),
+    body: formData,
+  });
+  return handleResponse<{ transcript: string }>(res);
 };
 
 /** POST /pronunciation/analyze */

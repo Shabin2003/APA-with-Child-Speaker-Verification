@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Shield, BookOpen, Users, LogOut, ShieldCheck, Hash } from 'lucide-react';
+import { Mic, Shield, BookOpen, Users, LogOut, ShieldCheck, Hash, Palette, Apple, Calculator } from 'lucide-react';
 import { SpeakerEnrollment } from './components/SpeakerEnrollment';
 import { SpeakerVerification } from './components/SpeakerVerification';
 import { PronunciationAssessment } from './components/PronunciationAssessment';
+import { FruitsNaming } from './components/FruitsNaming';
+import { ColoursMatching } from './components/ColoursMatching';
+import { BodmasModule } from './components/bodmas/BodmasModule';
 import { useAuth } from './contexts/AuthContext';
 
-type Tab = 'enrollment' | 'verification' | 'assessment';
+type Tab = 'enrollment' | 'verification' | 'assessment' | 'fruits' | 'colours' | 'bodmas';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('enrollment');
@@ -104,6 +107,42 @@ function App() {
               <BookOpen className="w-5 h-5" />
               Assessment
             </button>
+
+            <button
+              onClick={() => setActiveTab('fruits')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all whitespace-nowrap border-2 ${
+                activeTab === 'fruits'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg border-orange-500'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Apple className="w-5 h-5" />
+              Fruit Naming
+            </button>
+
+            <button
+              onClick={() => setActiveTab('colours')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all whitespace-nowrap border-2 ${
+                activeTab === 'colours'
+                  ? 'bg-gradient-to-r from-sky-500 to-indigo-500 text-white shadow-lg border-sky-500'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Palette className="w-5 h-5" />
+              Colours
+            </button>
+
+            <button
+              onClick={() => setActiveTab('bodmas')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all whitespace-nowrap border-2 ${
+                activeTab === 'bodmas'
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg border-purple-500'
+                  : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <Calculator className="w-5 h-5" />
+              BODMAS
+            </button>
           </nav>
         </div>
       </header>
@@ -112,6 +151,9 @@ function App() {
         {activeTab === 'enrollment' && <SpeakerEnrollment />}
         {activeTab === 'verification' && <SpeakerVerification />}
         {activeTab === 'assessment' && <PronunciationAssessment />}
+        {activeTab === 'fruits' && <FruitsNaming />}
+        {activeTab === 'colours' && <ColoursMatching />}
+        {activeTab === 'bodmas' && <BodmasModule />}
       </main>
 
       <footer className="bg-gradient-to-r from-gray-900 to-gray-800 text-white mt-16 border-t-4 border-blue-500">
